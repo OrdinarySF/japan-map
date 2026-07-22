@@ -1,0 +1,19 @@
+{
+  "name": "大阪 × 东京 行程地图",
+  "short_name": "行程地图",
+  "description": "旅行路上查看大阪东京行程",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

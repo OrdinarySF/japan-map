@@ -12,26 +12,41 @@
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+    }
     
+    html, body {
+      height: 100%;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       background: #0f172a;
       color: #e2e8f0;
-      height: 100vh;
+      /* iOS PWA: 避免 100vh 含状态栏导致底部被顶出 */
+      min-height: 100vh;
+      min-height: 100dvh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     
     header {
       background: linear-gradient(135deg, #1e293b, #0f172a);
-      padding: 10px 12px;
+      padding: calc(10px + var(--sat)) calc(12px + var(--sar)) 10px calc(12px + var(--sal));
       border-bottom: 1px solid #334155;
       flex-shrink: 0;
       z-index: 1100;
     }
 
     header.is-collapsed {
-      padding: 8px 12px;
+      padding: calc(8px + var(--sat)) calc(12px + var(--sar)) 8px calc(12px + var(--sal));
     }
 
     header.is-collapsed .header-body {
@@ -180,23 +195,37 @@
     #map {
       flex: 1;
       width: 100%;
-      min-height: 420px;
+      min-height: 0;
       position: relative;
+    }
+
+    /* Leaflet 缩放按钮避开刘海 / 左侧安全区 */
+    .leaflet-top.leaflet-left {
+      top: calc(10px + var(--sat));
+      left: calc(10px + var(--sal));
+    }
+
+    .leaflet-bottom.leaflet-right {
+      bottom: calc(10px + var(--sab));
+      right: calc(10px + var(--sar));
     }
     
     .search-panel {
       position: absolute;
-      top: 12px;
-      left: 12px;
+      top: calc(12px + var(--sat));
+      left: calc(12px + var(--sal));
       z-index: 1000;
       background: rgba(15, 23, 42, 0.95);
       border: 1px solid #334155;
       border-radius: 12px;
       padding: 12px;
       width: 320px;
-      max-width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px - var(--sal) - var(--sar));
+      max-height: calc(100% - 24px - var(--sat) - var(--sab));
+      overflow-y: auto;
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
       backdrop-filter: blur(8px);
+      -webkit-overflow-scrolling: touch;
     }
 
     .search-panel.is-hidden,
@@ -249,13 +278,13 @@
     }
 
     .map-panel-restore.left {
-      top: 12px;
-      left: 12px;
+      top: calc(12px + var(--sat));
+      left: calc(12px + var(--sal));
     }
 
     .map-panel-restore.right {
-      right: 12px;
-      bottom: 12px;
+      right: calc(12px + var(--sar));
+      bottom: calc(12px + var(--sab));
     }
 
     .restore-chip {
@@ -477,18 +506,19 @@
     
     .badge-panel {
       position: absolute;
-      right: 12px;
-      bottom: 12px;
+      right: calc(12px + var(--sar));
+      bottom: calc(12px + var(--sab));
       z-index: 1000;
       background: rgba(15, 23, 42, 0.95);
       border: 1px solid #334155;
       border-radius: 12px;
       padding: 10px 12px;
-      width: min(320px, calc(100vw - 24px));
-      max-height: min(55vh, 420px);
+      width: min(320px, calc(100vw - 24px - var(--sal) - var(--sar)));
+      max-height: min(55dvh, 420px);
       overflow-y: auto;
       box-shadow: 0 8px 24px rgba(0,0,0,0.4);
       backdrop-filter: blur(8px);
+      -webkit-overflow-scrolling: touch;
     }
     
     .badge-panel-title {
@@ -690,7 +720,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: calc(20px + var(--sat)) calc(20px + var(--sar)) calc(20px + var(--sab)) calc(20px + var(--sal));
     }
 
     #unlockGate.is-hidden {
@@ -849,11 +879,12 @@
 
     footer {
       background: #1e293b;
-      padding: 8px 14px;
+      padding: 8px calc(14px + var(--sar)) calc(8px + var(--sab)) calc(14px + var(--sal));
       font-size: 0.75rem;
       color: #64748b;
       text-align: center;
       border-top: 1px solid #334155;
+      flex-shrink: 0;
     }
     
     .badge-panel::-webkit-scrollbar {

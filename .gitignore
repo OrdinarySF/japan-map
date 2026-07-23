@@ -2,3 +2,8 @@
 passphrase.local
 itinerary.md
 .DS_Store
+
+# local sim screenshots
+.tmp-*
+.tmp-*.png
+.tmp-*.mobileconfig

@@ -33,14 +33,24 @@
       --radius-sm: 8px;
       --shadow: 0 4px 12px oklch(0 0 0 / 0.35);
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-      --sat: env(safe-area-inset-top, 0px);
-      --sab: env(safe-area-inset-bottom, 0px);
-      --sal: env(safe-area-inset-left, 0px);
-      --sar: env(safe-area-inset-right, 0px);
+      /* env() 直接用；勿只塞进 var 再 calc——部分 iOS/WebClip 下会算成 0 */
+      --sat: 0px;
+      --sab: 0px;
+      --sal: 0px;
+      --sar: 0px;
       --z-map: 0;
-      --z-float: 10;
+      --z-float: 1100; /* 高于 Leaflet pane(400)/control(800) */
       --z-header: 20;
       --z-unlock: 50;
+    }
+
+    @supports (padding: env(safe-area-inset-top)) {
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+      }
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,14 +75,27 @@
     /* —— Header —— */
     header {
       background: var(--surface);
-      padding: calc(10px + var(--sat)) calc(12px + var(--sar)) 10px calc(12px + var(--sal));
+      /* 双写 constant/env + var 兜底（PWA black-translucent） */
+      padding-top: calc(10px + constant(safe-area-inset-top));
+      padding-top: calc(10px + env(safe-area-inset-top, 0px));
+      padding-top: calc(10px + var(--sat));
+      padding-right: calc(12px + constant(safe-area-inset-right));
+      padding-right: calc(12px + env(safe-area-inset-right, 0px));
+      padding-right: calc(12px + var(--sar));
+      padding-bottom: 10px;
+      padding-left: calc(12px + constant(safe-area-inset-left));
+      padding-left: calc(12px + env(safe-area-inset-left, 0px));
+      padding-left: calc(12px + var(--sal));
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       z-index: var(--z-header);
     }
 
     header.is-collapsed {
-      padding: calc(8px + var(--sat)) calc(12px + var(--sar)) 8px calc(12px + var(--sal));
+      padding-top: calc(8px + constant(safe-area-inset-top));
+      padding-top: calc(8px + env(safe-area-inset-top, 0px));
+      padding-top: calc(8px + var(--sat));
+      padding-bottom: 8px;
     }
 
     header.is-collapsed .header-body { display: none; }
@@ -216,8 +239,8 @@
     .dot.tokyo { background: oklch(0.65 0.16 15); }
     .dot.bus { background: oklch(0.65 0.16 300); }
 
-    /* —— Map —— */
-    #map {
+    /* —— Map shell（面板与 Leaflet 同层，避免 pane z-index 盖住 UI）—— */
+    #mapShell {
       flex: 1;
       width: 100%;
       min-height: 0;
@@ -225,14 +248,23 @@
       z-index: var(--z-map);
     }
 
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    /* map 已在 header 下方，控件不再叠加 status-bar inset */
     .leaflet-top.leaflet-left {
-      top: calc(10px + var(--sat));
-      left: calc(10px + var(--sal));
+      top: 10px;
+      left: 10px;
     }
 
     .leaflet-bottom.leaflet-right {
-      bottom: calc(10px + var(--sab));
-      right: calc(10px + var(--sar));
+      bottom: 10px;
+      right: 10px;
     }
 
     /* —— Float sheets —— */
@@ -251,19 +283,19 @@
     .badge-panel.is-hidden { display: none; }
 
     .search-panel {
-      top: calc(12px + var(--sat));
-      left: calc(12px + var(--sal));
+      top: 12px;
+      left: 12px;
       padding: 12px;
-      width: min(300px, calc(100vw - 24px - var(--sal) - var(--sar)));
-      max-height: calc(100% - 24px - var(--sat) - var(--sab));
+      width: min(300px, calc(100% - 24px));
+      max-height: calc(100% - 24px);
       overflow-y: auto;
     }
 
     .badge-panel {
-      right: calc(12px + var(--sar));
-      bottom: calc(12px + var(--sab));
+      right: 12px;
+      bottom: 12px;
       padding: 10px 12px;
-      width: min(320px, calc(100vw - 24px - var(--sal) - var(--sar)));
+      width: min(320px, calc(100% - 24px));
       max-height: min(58dvh, 440px);
       overflow-y: auto;
     }
@@ -328,13 +360,13 @@
     }
 
     .map-panel-restore.left {
-      top: calc(12px + var(--sat));
-      left: calc(12px + var(--sal));
+      top: 12px;
+      left: 12px;
     }
 
     .map-panel-restore.right {
-      right: calc(12px + var(--sar));
-      bottom: calc(12px + var(--sab));
+      right: 12px;
+      bottom: 12px;
     }
 
     .restore-chip {
@@ -841,7 +873,16 @@
 
     footer {
       background: var(--surface);
-      padding: 6px calc(12px + var(--sar)) max(6px, var(--sab)) calc(12px + var(--sal));
+      padding-top: 6px;
+      padding-right: calc(12px + constant(safe-area-inset-right));
+      padding-right: calc(12px + env(safe-area-inset-right, 0px));
+      padding-right: calc(12px + var(--sar));
+      padding-bottom: max(6px, constant(safe-area-inset-bottom));
+      padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+      padding-bottom: max(6px, var(--sab));
+      padding-left: calc(12px + constant(safe-area-inset-left));
+      padding-left: calc(12px + env(safe-area-inset-left, 0px));
+      padding-left: calc(12px + var(--sal));
       font-size: 0.7rem;
       color: var(--ink-faint);
       text-align: center;
@@ -923,7 +964,9 @@
     </div>
   </header>
 
-  <div id="map">
+  <div id="mapShell">
+    <div id="map"></div>
+
     <div class="map-panel-restore left">
       <button type="button" class="restore-chip" id="restoreSearch">导航</button>
     </div>
@@ -998,18 +1041,41 @@
   
   <script>
     // 发版时改这里；底栏会显示，用来确认手机跑的是哪一版
-    const APP_VERSION = '2026.07.23-4';
-    const SW_CACHE_LABEL = 'v8';
+    const APP_VERSION = '2026.07.23-5';
+    const SW_CACHE_LABEL = 'v9';
+
+    function isStandalonePwa() {
+      return window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches;
+    }
+
+    /** iOS PWA/WebClip 偶发 env(safe-area)=0 但内容仍顶到状态栏：测一次并写 CSS 变量兜底 */
+    function applySafeAreaFallback() {
+      const probe = document.createElement('div');
+      probe.setAttribute('aria-hidden', 'true');
+      probe.style.cssText =
+        'position:fixed;visibility:hidden;pointer-events:none;' +
+        'padding-top:env(safe-area-inset-top,0px);' +
+        'padding-bottom:env(safe-area-inset-bottom,0px);';
+      document.documentElement.appendChild(probe);
+      const cs = getComputedStyle(probe);
+      const sat = parseFloat(cs.paddingTop) || 0;
+      const sab = parseFloat(cs.paddingBottom) || 0;
+      probe.remove();
+      const root = document.documentElement.style;
+      if (sat > 0) root.setProperty('--sat', sat + 'px');
+      else if (isStandalonePwa()) root.setProperty('--sat', '59px'); // Dynamic Island 常见高度
+      if (sab > 0) root.setProperty('--sab', sab + 'px');
+      else if (isStandalonePwa()) root.setProperty('--sab', '34px'); // home indicator
+    }
+    applySafeAreaFallback();
 
     function paintAppVersion(extra) {
       const el = document.getElementById('appVersion');
       if (!el) return;
       const bits = ['app ' + APP_VERSION, 'sw ' + SW_CACHE_LABEL];
       if (extra) bits.push(extra);
-      if (window.navigator.standalone === true ||
-          window.matchMedia('(display-mode: standalone)').matches) {
-        bits.push('pwa');
-      }
+      if (isStandalonePwa()) bits.push('pwa');
       el.textContent = bits.join(' · ');
     }
     paintAppVersion();

@@ -878,12 +878,26 @@
 
     footer {
       background: #1e293b;
-      padding: 8px calc(14px + var(--sar)) calc(8px + var(--sab)) calc(14px + var(--sal));
-      font-size: 0.75rem;
+      padding: 6px calc(12px + var(--sar)) max(6px, var(--sab)) calc(12px + var(--sal));
+      font-size: 0.72rem;
       color: #64748b;
       text-align: center;
       border-top: 1px solid #334155;
       flex-shrink: 0;
+      line-height: 1.35;
+    }
+
+    #pageFooter {
+      font-size: 0.72rem;
+      color: #64748b;
+    }
+
+    #appVersion {
+      margin-top: 2px;
+      font-size: 0.65rem;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
     }
     
     .badge-panel::-webkit-scrollbar {
@@ -1011,13 +1025,31 @@
     </div>
   </div>
 
-  <footer id="pageFooter">
-    加载 itinerary.md …
+  <footer>
+    <div id="pageFooter">加载行程…</div>
+    <div id="appVersion"></div>
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <script>
+    // 发版时改这里；底栏会显示，用来确认手机跑的是哪一版
+    const APP_VERSION = '2026.07.23-3';
+    const SW_CACHE_LABEL = 'v7';
+
+    function paintAppVersion(extra) {
+      const el = document.getElementById('appVersion');
+      if (!el) return;
+      const bits = ['app ' + APP_VERSION, 'sw ' + SW_CACHE_LABEL];
+      if (extra) bits.push(extra);
+      if (window.navigator.standalone === true ||
+          window.matchMedia('(display-mode: standalone)').matches) {
+        bits.push('pwa');
+      }
+      el.textContent = bits.join(' · ');
+    }
+    paintAppVersion();
+
     const map = L.map('map').setView([34.95, 136.9], 8);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -2202,9 +2234,11 @@
       if (fromCache || isOffline) {
         document.getElementById('pageFooter').textContent =
           (data.meta.footer || '') + ' · 已解锁（缓存）';
+        paintAppVersion('cache');
       } else {
         document.getElementById('pageFooter').textContent =
           (data.meta.footer || '') + ' · 行程已加密';
+        paintAppVersion('online');
       }
       hideUnlockGate();
     }

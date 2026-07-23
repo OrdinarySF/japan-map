@@ -1,5 +1,5 @@
 /* Japan trip map service worker — shell + itinerary offline */
-const CACHE = 'japan-map-v5-safe-area';
+const CACHE = 'japan-map-v6-safe-area-revert';
 const PRECACHE = [
   './',
   './index.html',

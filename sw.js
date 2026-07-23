@@ -1,5 +1,5 @@
 /* Japan trip map service worker — shell + itinerary offline */
-const CACHE = 'japan-map-v9-pwa-safe';
+const CACHE = 'japan-map-v10-badge-scroll';
 const PRECACHE = [
   './',
   './index.html',

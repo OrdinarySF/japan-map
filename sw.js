@@ -1,5 +1,5 @@
 /* Japan trip map service worker — shell + itinerary offline */
-const CACHE = 'japan-map-v7-version-footer';
+const CACHE = 'japan-map-v8-ui-refactor';
 const PRECACHE = [
   './',
   './index.html',

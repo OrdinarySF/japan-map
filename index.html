@@ -604,6 +604,30 @@
       border-color: var(--border-strong);
     }
 
+    /* 列表 ↔ pin 共用选中态 */
+    .badge-item.is-active {
+      background: oklch(0.30 0.04 250);
+      border-color: var(--accent);
+    }
+
+    .badge-item.is-active .badge-name {
+      color: var(--ink);
+    }
+
+    .custom-marker {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    .custom-marker > div {
+      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+    }
+
+    .custom-marker.is-active > div {
+      transform: scale(1.45);
+      box-shadow: 0 0 0 3px var(--accent), 0 2px 10px oklch(0 0 0 / 0.55);
+    }
+
     .badge-item-main {
       display: flex;
       align-items: flex-start;
@@ -1055,8 +1079,8 @@
   
   <script>
     // 发版时改这里；底栏会显示，用来确认手机跑的是哪一版
-    const APP_VERSION = '2026.07.23-7';
-    const SW_CACHE_LABEL = 'v10';
+    const APP_VERSION = '2026.08.08-1';
+    const SW_CACHE_LABEL = 'v12';
 
     function isStandalonePwa() {
       return window.navigator.standalone === true ||
@@ -1483,6 +1507,7 @@
     let currentMarkers = [];
     let currentLines = [];
     let markerMap = {};
+    let activePointId = null; // 列表 ↔ pin 当前选中
     let currentCity = 'all';
     let selectedDays = new Set(['all']);
     let routeLine = null;
@@ -1495,6 +1520,105 @@
     let isOffline = !navigator.onLine;
     const osrmCache = new Map();
     const ITINERARY_CACHE_KEY = 'japan-map:itinerary-md-v2';
+
+    function prefersReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function applyMarkerHighlight(pointId) {
+      Object.entries(markerMap).forEach(([id, marker]) => {
+        const el = marker.getElement();
+        if (el) el.classList.toggle('is-active', id === pointId);
+        marker.setZIndexOffset(id === pointId ? 1000 : 0);
+      });
+    }
+
+    function clearPointSelection() {
+      activePointId = null;
+      document.querySelectorAll('#badgeList .badge-item').forEach(el => {
+        el.classList.remove('is-active', 'is-open');
+      });
+      Object.values(markerMap).forEach(marker => {
+        const el = marker.getElement();
+        if (el) el.classList.remove('is-active');
+        marker.setZIndexOffset(0);
+      });
+    }
+
+    /**
+     * 列表 ↔ pin 双向聚焦
+     * @param {string} pointId
+     * @param {{ source?: 'list'|'map'|'button', openDetail?: boolean, toggle?: boolean }} [opts]
+     */
+    function selectPoint(pointId, opts = {}) {
+      const source = opts.source || 'list';
+      const openDetail = opts.openDetail !== false;
+      const toggle = !!opts.toggle;
+      const p = points.find(x => x.id === pointId);
+      if (!p) return;
+
+      // 列表再次点同一项 → 收起
+      if (toggle && activePointId === pointId) {
+        if (markerMap[pointId]) markerMap[pointId].closePopup();
+        clearPointSelection();
+        return;
+      }
+
+      activePointId = pointId;
+
+      // 从地图点 pin：保证行程面板可见，才能滚到对应卡
+      if (source === 'map') {
+        setPanelVisible('badgePanel', 'restoreBadges', true);
+      }
+
+      const list = document.getElementById('badgeList');
+      if (list) {
+        list.querySelectorAll('.badge-item').forEach(el => {
+          const match = el.dataset.pointId === pointId;
+          el.classList.toggle('is-active', match);
+          if (openDetail) el.classList.toggle('is-open', match);
+          else if (!match) el.classList.remove('is-open');
+        });
+        const item = list.querySelector('.badge-item[data-point-id="' + CSS.escape(pointId) + '"]');
+        if (item) {
+          requestAnimationFrame(() => {
+            item.scrollIntoView({
+              behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+              block: 'nearest'
+            });
+          });
+        }
+      }
+
+      applyMarkerHighlight(pointId);
+
+      const minZoom = source === 'button' ? 16 : 15;
+      const zoom = Math.max(map.getZoom(), minZoom);
+      const center = [p.lat, p.lng];
+      if (prefersReducedMotion()) {
+        map.setView(center, zoom, { animate: false });
+      } else if (typeof map.flyTo === 'function') {
+        map.flyTo(center, zoom, { duration: 0.55 });
+      } else {
+        map.setView(center, zoom, { animate: true });
+      }
+
+      const marker = markerMap[pointId];
+      if (marker) marker.openPopup();
+    }
+
+    /** render 重建列表/标记后，恢复选中态（不飞地图） */
+    function resyncSelectionUi() {
+      if (!activePointId) return;
+      if (!markerMap[activePointId]) {
+        activePointId = null;
+        return;
+      }
+      applyMarkerHighlight(activePointId);
+      document.querySelectorAll('#badgeList .badge-item').forEach(el => {
+        el.classList.toggle('is-active', el.dataset.pointId === activePointId);
+      });
+    }
 
     /** 日本时区「旅行日」：4:00 前仍算昨天。返回如 9-5 */
     function getJapanTravelDayId(date = new Date()) {
@@ -1746,14 +1870,7 @@
 
           item.querySelector('.badge-item-main').addEventListener('click', (e) => {
             e.stopPropagation();
-            const open = item.classList.toggle('is-open');
-            list.querySelectorAll('.badge-item').forEach(el => {
-              if (el !== item) el.classList.remove('is-open');
-            });
-            if (open) {
-              map.setView([p.lat, p.lng], 15, { animate: true });
-              if (markerMap[p.id]) markerMap[p.id].openPopup();
-            }
+            selectPoint(p.id, { source: 'list', openDetail: true, toggle: true });
           });
 
           item.querySelector('[data-role="origin"]').addEventListener('click', (e) => {
@@ -1777,8 +1894,7 @@
             } else if (act === 'copy') {
               copyText(`${p.name}\n${p.desc || ''}\n${p.lat}, ${p.lng}\n${p.tip || ''}`);
             } else if (act === 'map') {
-              map.setView([p.lat, p.lng], 16, { animate: true });
-              if (markerMap[p.id]) markerMap[p.id].openPopup();
+              selectPoint(p.id, { source: 'button', openDetail: true });
             }
           });
 
@@ -1798,6 +1914,7 @@
       visiblePoints.forEach(p => {
         const item = document.createElement('div');
         item.className = 'badge-item';
+        item.dataset.pointId = p.id;
         item.innerHTML = `
           <div class="badge-item-main">
             <span class="badge-dot" style="background:${getColor(p.type)}"></span>
@@ -1808,8 +1925,7 @@
           </div>
         `;
         item.addEventListener('click', () => {
-          map.setView([p.lat, p.lng], 15, { animate: true });
-          if (markerMap[p.id]) markerMap[p.id].openPopup();
+          selectPoint(p.id, { source: 'list', openDetail: false });
         });
         list.appendChild(item);
       });
@@ -1840,11 +1956,16 @@
             <div class="popup-desc">${p.desc}</div>
             ${tipHtml}
           `);
+        // pin → 列表：展开对应卡并滚入视野
+        marker.on('click', () => {
+          selectPoint(p.id, { source: 'map', openDetail: true });
+        });
         currentMarkers.push(marker);
         markerMap[p.id] = marker;
       });
 
       updateTimeline(visiblePoints);
+      resyncSelectionUi();
 
       // 当日行程真实路网线（异步 OSRM；短步行已防绕路）
       if (!isOffline) {

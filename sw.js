@@ -1,5 +1,5 @@
 /* Japan trip map service worker — shell + itinerary offline */
-const CACHE = 'japan-map-v14-tip-wrap';
+const CACHE = 'japan-map-v17-aux-sheet';
 const PRECACHE = [
   './',
   './index.html',

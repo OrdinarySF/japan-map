@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -45,7 +45,10 @@
       --z-aux: 50;
       --z-unlock: 60;
       --top-chrome-h: 52px;
-      --day-sheet-h: 42dvh;
+      --day-sheet-h: 42%;
+      --day-peek-h: 72px;
+      --app-h: 100lvh;
+      --app-top: 0px;
       --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -60,15 +63,29 @@
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html, body { height: 100%; }
+    html {
+      height: 100%;
+      height: -webkit-fill-available;
+      background: var(--bg);
+    }
+
+    html, body {
+      width: 100%;
+      overflow: hidden;
+    }
 
     body {
       font-family: var(--font);
       background: var(--bg);
       color: var(--ink);
-      min-height: 100vh;
+      min-height: 100%;
       min-height: 100dvh;
+      min-height: 100lvh;
+      min-height: -webkit-fill-available;
+      height: 100%;
       height: 100dvh;
+      height: 100lvh;
+      height: var(--app-h, 100lvh);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -79,12 +96,16 @@
     button, input, select { font: inherit; color: inherit; }
     button { -webkit-tap-highlight-color: transparent; }
 
-    /* —— App shell: map fills viewport —— */
+    /* —— App shell: pin to visual viewport (iOS 100dvh 会在底部留黑条) —— */
     #mapShell {
-      flex: 1;
+      position: fixed;
+      top: var(--app-top, 0px);
+      left: 0;
+      right: 0;
       width: 100%;
-      min-height: 0;
-      position: relative;
+      height: var(--app-h, 100lvh);
+      min-height: 100%;
+      min-height: -webkit-fill-available;
       z-index: var(--z-map);
     }
 
@@ -94,6 +115,11 @@
       width: 100%;
       height: 100%;
       z-index: 0;
+    }
+
+    .leaflet-container {
+      background: var(--bg);
+      font: inherit;
     }
 
     /* Leaflet controls clear of top chrome + bottom sheet */
@@ -358,7 +384,7 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       transition: height 0.28s var(--ease-out), transform 0.28s var(--ease-out);
-      height: 42dvh;
+      height: 42%;
       max-height: calc(100% - var(--top-chrome-h) - var(--sat) - 12px);
     }
 
@@ -367,7 +393,7 @@
     }
 
     .day-sheet[data-state="half"] {
-      height: 42dvh;
+      height: 42%;
     }
 
     .day-sheet[data-state="full"] {
@@ -429,9 +455,10 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
-      flex: 1 1 0;
+      /* auto basis: parent height:auto must grow with city/date buttons.
+         0 basis collapses the body to 0 on desktop (top + bottom:auto). */
+      flex: 1 1 auto;
       min-height: 0;
-      max-height: 100%;
     }
 
     .filter-section { margin-bottom: 14px; }
@@ -1145,15 +1172,18 @@
       .aux-sheet {
         left: 14px;
         right: auto;
-        top: 14px;
-        bottom: auto;
+        /* below top chrome so it does not sit on 导航/筛选 */
+        top: calc(var(--top-chrome-h) + var(--sat) + 16px);
+        bottom: 14px;
         width: min(360px, 34vw);
-        max-height: calc(100% - 28px);
+        max-height: none;
         border-radius: var(--radius);
         border: 1px solid var(--border);
         padding-bottom: 0;
         box-shadow: var(--shadow);
       }
+
+      .aux-sheet .sheet-grab { display: none; }
 
       .aux-sheet.is-hidden {
         transform: none;
@@ -1318,8 +1348,8 @@
   
   <script>
     // 发版时改这里；底栏会显示，用来确认手机跑的是哪一版
-    const APP_VERSION = '2026.08.28-2';
-    const SW_CACHE_LABEL = 'v14';
+    const APP_VERSION = '2026.08.29-2';
+    const SW_CACHE_LABEL = 'v17';
 
     function isStandalonePwa() {
       return window.navigator.standalone === true ||
@@ -1347,6 +1377,20 @@
     }
     applySafeAreaFallback();
 
+    function syncAppViewport() {
+      const vv = window.visualViewport;
+      const vis = vv ? Math.round(vv.height) : 0;
+      const inner = window.innerHeight || 0;
+      const layout = document.documentElement.clientHeight || 0;
+      // Use the largest height so the shell never leaves a black gap under the sheet.
+      const h = Math.max(vis, inner, layout);
+      if (h >= 100) {
+        document.documentElement.style.setProperty('--app-h', h + 'px');
+      }
+      document.documentElement.style.setProperty('--app-top', '0px');
+    }
+    syncAppViewport();
+
     function paintAppVersion(extra) {
       const el = document.getElementById('appVersion');
       if (!el) return;
@@ -1359,9 +1403,12 @@
 
     const map = L.map('map').setView([34.95, 136.9], 8);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-      maxZoom: 19
+    // CARTO raster tiles now watermark "API KEY REQUIRED" without a key.
+    // Esri dark gray is key-free, dark, and zooms to street level.
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri',
+      maxZoom: 19,
+      maxNativeZoom: 19
     }).addTo(map);
 
     // 浮层面板在地图之上：阻止滚轮/点击穿透到 Leaflet
@@ -1390,6 +1437,19 @@
 
     function invalidateMapSoon() {
       setTimeout(() => { try { map.invalidateSize(); } catch (_) {} }, 60);
+    }
+
+    function onViewportChange() {
+      syncAppViewport();
+      updateDaySheetOffset();
+      invalidateMapSoon();
+    }
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(onViewportChange, 250);
+    });
+    if (window.visualViewport) {
+      visualViewport.addEventListener('resize', onViewportChange);
     }
 
     function syncDayFab() {
@@ -1893,7 +1953,7 @@
       let timer = null;
       let reqId = 0;
 
-      inputEl.addEventListener('input', () => {
+      function runSearch() {
         const q = inputEl.value.trim();
         setCustom(null);
         pickedEl.className = 'place-picked';
@@ -1938,7 +1998,9 @@
             suggestEl.innerHTML = '<div class="place-suggest-empty">搜索失败，请稍后重试</div>';
           }
         }, 350);
-      });
+      }
+      inputEl.addEventListener('input', runSearch);
+      inputEl.addEventListener('change', runSearch);
 
       document.addEventListener('click', (e) => {
         if (!wrapEl.contains(e.target)) {
@@ -2275,13 +2337,14 @@
       }
     }
 
-    function buildDayTimeline(dayId) {
-      const dayPoints = points.filter(p => p.days && p.days.includes(dayId));
+    function buildDayTimeline(dayId, pool) {
+      const src = pool || points;
+      const dayPoints = src.filter(p => p.days && p.days.includes(dayId));
       const order = dayRouteOrders[dayId];
       let ordered = [];
       if (order && order.length) {
         order.forEach(id => {
-          const p = dayPoints.find(x => x.id === id) || points.find(x => x.id === id);
+          const p = dayPoints.find(x => x.id === id);
           if (p && !ordered.some(o => o.id === p.id)) ordered.push(p);
         });
         dayPoints.forEach(p => {
@@ -2336,11 +2399,14 @@
         const label = dayLabelOf(singleDay);
         titleEl.textContent = isTodayView ? '今日行程' : label;
         todayChip.style.display = isTodayView ? 'inline-block' : 'none';
-        const { ordered, segs } = buildDayTimeline(singleDay);
+        const { ordered, segs } = buildDayTimeline(singleDay, visiblePoints);
         count.textContent = ordered.length ? ` · ${ordered.length} 站` : '';
 
         if (!ordered.length) {
-          list.innerHTML = `<div class="empty-today">这一天没有排景点。<br>可在顶部改日期，或查看「全部日期」。</div>`;
+          const msg = currentCity !== 'all'
+            ? '当前城市筛选下，这一天没有景点。<br>可点「全部」城市，或换日期。'
+            : '这一天没有排景点。<br>可在顶部改日期，或查看「全部日期」。';
+          list.innerHTML = `<div class="empty-today">${msg}</div>`;
           return;
         }
 
@@ -2666,7 +2732,46 @@
       }
     }
 
-    // 搜索地点：行程锚点优先 + Nominatim
+    async function searchPhoton(query) {
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=zh`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('photon ' + res.status);
+      const data = await res.json();
+      return (data.features || [])
+        .filter(f => {
+          const cc = String(f.properties?.countrycode || '').toLowerCase();
+          return !cc || cc === 'jp';
+        })
+        .map(f => {
+          const [lng, lat] = f.geometry.coordinates;
+          const p = f.properties || {};
+          const shortName = p.name || query;
+          const name = [p.name, p.city, p.state, p.country].filter(Boolean).join(', ');
+          return { lat, lng, name, shortName, fromItinerary: false };
+        });
+    }
+
+    async function searchNominatim(query) {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=6&countrycodes=jp&addressdetails=0`;
+      const res = await fetch(url, {
+        headers: { 'Accept-Language': 'zh-CN,ja,en', 'Accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error('nominatim ' + res.status);
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+      return data.map(item => {
+        const full = item.display_name || '';
+        return {
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+          name: full,
+          shortName: full.split(',').slice(0, 3).join(',').trim(),
+          fromItinerary: false
+        };
+      });
+    }
+
+    // 搜索地点：行程锚点优先；Photon，失败再 Nominatim
     async function searchPlaces(query) {
       const q = query.trim().toLowerCase();
       const local = points
@@ -2686,35 +2791,22 @@
 
       let remote = [];
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=6&countrycodes=jp&addressdetails=0`;
-        const res = await fetch(url, {
-          headers: {
-            'Accept-Language': 'zh-CN,ja,en',
-            'Accept': 'application/json'
-          }
-        });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          remote = data.map(item => {
-            const full = item.display_name || '';
-            const shortName = full.split(',').slice(0, 3).join(',').trim();
-            return {
-              lat: parseFloat(item.lat),
-              lng: parseFloat(item.lon),
-              name: full,
-              shortName,
-              fromItinerary: false
-            };
-          });
-        }
+        remote = await searchPhoton(query);
       } catch (err) {
-        console.error(err);
+        console.warn('photon', err);
+      }
+      if (!remote.length) {
+        try {
+          remote = await searchNominatim(query);
+        } catch (err) {
+          console.warn('nominatim', err);
+        }
       }
 
-      // 合并去重（按坐标粗略）
       const seen = new Set();
       const out = [];
       [...local, ...remote].forEach(r => {
+        if (!Number.isFinite(r.lat) || !Number.isFinite(r.lng)) return;
         const k = `${r.lat.toFixed(4)},${r.lng.toFixed(4)}`;
         if (seen.has(k)) return;
         seen.add(k);
@@ -2943,6 +3035,7 @@
 
     function hideUnlockGate() {
       document.getElementById('unlockGate').classList.add('is-hidden');
+      invalidateMapSoon();
     }
 
     function showUnlockError(msg) {

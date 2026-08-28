@@ -35,10 +35,11 @@
 
 ## 4. Layout
 
-- **Shell**: header (collapsible) → map flex 1 → footer version
-- **Floating**: day sheet (bottom-right, primary), nav sheet (top-left, secondary)
-- **Safe areas**: `env(safe-area-inset-*)` on header/footer/floaters
-- **Z-index**: map 0 · float 10 · header 20 · unlock 50
+- **Shell (mobile-first)**: map fills viewport; floating top chrome; no persistent footer bar
+- **Day sheet**: bottom sheet with peek / half / full / hidden; docked right panel ≥900px
+- **Aux sheets**: filter + nav open on demand over scrim (phone); left floating card (desktop)
+- **Safe areas**: `env(safe-area-inset-*)` on chrome, sheets, unlock
+- **Z-index**: map 0 · chrome 20 · fab 30 · day sheet 40 · scrim 45 · aux 50 · unlock 60
 
 ## 5. Components
 

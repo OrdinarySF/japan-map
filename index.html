@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
-    /* DESIGN.md tokens — restrained product dark */
+    /* DESIGN.md tokens — restrained product dark, mobile-first */
     :root {
       --bg: oklch(0.16 0.02 250);
       --surface: oklch(0.22 0.025 250);
@@ -33,15 +33,20 @@
       --radius-sm: 8px;
       --shadow: 0 4px 12px oklch(0 0 0 / 0.35);
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-      /* env() 直接用；勿只塞进 var 再 calc——部分 iOS/WebClip 下会算成 0 */
       --sat: 0px;
       --sab: 0px;
       --sal: 0px;
       --sar: 0px;
       --z-map: 0;
-      --z-float: 1100; /* 高于 Leaflet pane(400)/control(800) */
-      --z-header: 20;
-      --z-unlock: 50;
+      --z-chrome: 20;
+      --z-fab: 30;
+      --z-sheet: 40;
+      --z-scrim: 45;
+      --z-aux: 50;
+      --z-unlock: 60;
+      --top-chrome-h: 52px;
+      --day-sheet-h: 42dvh;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @supports (padding: env(safe-area-inset-top)) {
@@ -68,114 +73,390 @@
       flex-direction: column;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+      touch-action: manipulation;
     }
 
     button, input, select { font: inherit; color: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
 
-    /* —— Header —— */
-    header {
-      background: var(--surface);
-      /* 双写 constant/env + var 兜底（PWA black-translucent） */
-      padding-top: calc(10px + constant(safe-area-inset-top));
-      padding-top: calc(10px + env(safe-area-inset-top, 0px));
-      padding-top: calc(10px + var(--sat));
-      padding-right: calc(12px + constant(safe-area-inset-right));
-      padding-right: calc(12px + env(safe-area-inset-right, 0px));
-      padding-right: calc(12px + var(--sar));
-      padding-bottom: 10px;
-      padding-left: calc(12px + constant(safe-area-inset-left));
-      padding-left: calc(12px + env(safe-area-inset-left, 0px));
-      padding-left: calc(12px + var(--sal));
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      z-index: var(--z-header);
+    /* —— App shell: map fills viewport —— */
+    #mapShell {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      position: relative;
+      z-index: var(--z-map);
     }
 
-    header.is-collapsed {
+    #map {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    /* Leaflet controls clear of top chrome + bottom sheet */
+    .leaflet-top.leaflet-left {
+      top: calc(var(--top-chrome-h) + var(--sat) + 10px);
+      left: calc(10px + var(--sal));
+    }
+
+    .leaflet-bottom.leaflet-right {
+      bottom: calc(var(--day-sheet-h) + var(--sab) + 16px);
+      right: calc(10px + var(--sar));
+    }
+
+    .leaflet-control-attribution {
+      max-width: 46vw;
+      font-size: 9px !important;
+      background: oklch(0.16 0.02 250 / 0.7) !important;
+      color: var(--ink-faint) !important;
+      margin: 0 !important;
+    }
+
+    /* —— Top chrome (floating) —— */
+    .top-chrome {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: var(--z-chrome);
       padding-top: calc(8px + constant(safe-area-inset-top));
       padding-top: calc(8px + env(safe-area-inset-top, 0px));
       padding-top: calc(8px + var(--sat));
-      padding-bottom: 8px;
+      padding-right: calc(10px + constant(safe-area-inset-right));
+      padding-right: calc(10px + env(safe-area-inset-right, 0px));
+      padding-right: calc(10px + var(--sar));
+      padding-bottom: 0;
+      padding-left: calc(10px + constant(safe-area-inset-left));
+      padding-left: calc(10px + env(safe-area-inset-left, 0px));
+      padding-left: calc(10px + var(--sal));
+      pointer-events: none;
     }
 
-    header.is-collapsed .header-body { display: none; }
-    header.is-collapsed .header-top { margin-bottom: 0; }
-    header.is-collapsed .header-toggle { transform: rotate(-90deg); }
-
-    .header-top {
+    .top-bar {
+      pointer-events: auto;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 8px;
+      min-height: 44px;
+      padding: 6px 8px 6px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
     }
 
     .header-titles { min-width: 0; flex: 1; }
 
-    header h1 {
-      font-size: 1.05rem;
+    .top-chrome h1 {
+      font-size: 0.95rem;
       font-weight: 600;
       color: var(--ink);
       letter-spacing: -0.02em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      text-wrap: balance;
+      line-height: 1.25;
     }
 
-    header .subtitle {
-      font-size: 0.72rem;
+    .top-chrome .subtitle {
+      font-size: 0.7rem;
       color: var(--ink-muted);
-      margin-top: 2px;
+      margin-top: 1px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1.3;
     }
 
-    .header-toggle {
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       flex-shrink: 0;
-      width: 36px;
-      height: 36px;
+    }
+
+    .chrome-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 12px;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       background: var(--surface-2);
       color: var(--ink);
-      font-size: 1rem;
+      font-size: 0.78rem;
+      font-weight: 600;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease;
+      gap: 4px;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
-    .header-toggle:hover { background: var(--surface-3); }
-    .header-toggle:focus-visible {
+    .chrome-btn:hover { background: var(--surface-3); }
+    .chrome-btn:focus-visible,
+    .fab-btn:focus-visible,
+    .sheet-icon-btn:focus-visible,
+    .day-btn:focus-visible,
+    .city-btn:focus-visible,
+    .mode-btn:focus-visible,
+    .panel-hide-btn:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
 
-    .filter-section { margin-bottom: 10px; }
+    .chrome-btn.is-active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* —— Map FABs —— */
+    .map-fabs {
+      position: absolute;
+      z-index: var(--z-fab);
+      right: calc(10px + var(--sar));
+      bottom: calc(var(--day-sheet-h) + var(--sab) + 14px);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+      transition: bottom 0.28s var(--ease-out);
+    }
+
+    .fab-btn {
+      pointer-events: auto;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+    }
+
+    .fab-btn.show { display: inline-flex; }
+    .fab-btn:hover { border-color: var(--accent); }
+    .fab-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* —— Scrim —— */
+    .sheet-scrim {
+      position: absolute;
+      inset: 0;
+      z-index: var(--z-scrim);
+      background: oklch(0.1 0.02 250 / 0.55);
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s var(--ease-out);
+    }
+
+    .sheet-scrim.is-on {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* —— Shared sheet chrome —— */
+    .sheet-grab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 28px;
+      padding: 10px 0 4px;
+      border: 0;
+      background: transparent;
+      cursor: grab;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+
+    .sheet-grab:active { cursor: grabbing; }
+
+    .sheet-grab-bar {
+      width: 40px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border-strong);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 14px 10px;
+      flex-shrink: 0;
+    }
+
+    .badge-panel-title,
+    .aux-sheet h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--ink);
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .sheet-icon-btn,
+    .panel-hide-btn {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--ink-muted);
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sheet-icon-btn:hover,
+    .panel-hide-btn:hover {
+      background: var(--surface-3);
+      color: var(--ink);
+    }
+
+    /* —— Day sheet (bottom on phone) —— */
+    .day-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: var(--z-sheet);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom: 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+      box-shadow: 0 -6px 20px oklch(0 0 0 / 0.35);
+      padding-bottom: var(--sab);
+      overflow: hidden;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      transition: height 0.28s var(--ease-out), transform 0.28s var(--ease-out);
+      height: 42dvh;
+      max-height: calc(100% - var(--top-chrome-h) - var(--sat) - 12px);
+    }
+
+    .day-sheet[data-state="peek"] {
+      height: calc(var(--day-peek-h) + var(--sab));
+    }
+
+    .day-sheet[data-state="half"] {
+      height: 42dvh;
+    }
+
+    .day-sheet[data-state="full"] {
+      height: calc(100% - var(--top-chrome-h) - var(--sat) - 12px);
+    }
+
+    .day-sheet[data-state="hidden"] {
+      transform: translateY(110%);
+      pointer-events: none;
+    }
+
+    .day-sheet.is-dragging {
+      transition: none;
+    }
+
+    .day-sheet.is-tucked {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(24px);
+    }
+
+    .day-sheet[data-state="peek"] .badge-list,
+    .day-sheet[data-state="peek"] .offline-banner {
+      visibility: hidden;
+    }
+
+    /* —— Aux sheets (filter / nav) —— */
+    .aux-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: var(--z-aux);
+      display: flex;
+      flex-direction: column;
+      /* leave top band for scrim tap-to-dismiss */
+      max-height: min(72dvh, calc(100% - var(--top-chrome-h) - var(--sat) - 48px));
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom: 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+      box-shadow: 0 -8px 24px oklch(0 0 0 / 0.4);
+      padding-bottom: var(--sab);
+      overflow: hidden;
+      transform: translateY(0);
+      transition: transform 0.28s var(--ease-out);
+    }
+
+    .aux-sheet.is-hidden {
+      transform: translateY(110%);
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .aux-sheet-body {
+      padding: 0 14px calc(18px + var(--sab));
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      flex: 1 1 0;
+      min-height: 0;
+      max-height: 100%;
+    }
+
+    .filter-section { margin-bottom: 14px; }
 
     .filter-label {
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       font-weight: 500;
       color: var(--ink-faint);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
 
     .day-filters, .city-filters {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px;
     }
 
     .day-btn, .city-btn {
       background: var(--surface-2);
       border: 1px solid var(--border);
       color: var(--ink-muted);
-      padding: 6px 11px;
+      padding: 10px 14px;
+      min-height: 40px;
       border-radius: 999px;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       font-weight: 500;
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -186,11 +467,6 @@
     .day-btn:hover, .city-btn:hover {
       background: var(--surface-3);
       color: var(--ink);
-    }
-
-    .day-btn:focus-visible, .city-btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
     }
 
     .day-btn.active {
@@ -216,7 +492,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      font-size: 0.72rem;
+      font-size: 0.75rem;
       color: var(--ink-muted);
       margin-top: 4px;
     }
@@ -224,7 +500,7 @@
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
     }
 
     .dot {
@@ -239,178 +515,44 @@
     .dot.tokyo { background: oklch(0.65 0.16 15); }
     .dot.bus { background: oklch(0.65 0.16 300); }
 
-    /* —— Map shell（面板与 Leaflet 同层，避免 pane z-index 盖住 UI）—— */
-    #mapShell {
-      flex: 1;
-      width: 100%;
-      min-height: 0;
-      position: relative;
-      z-index: var(--z-map);
+    .sheet-meta {
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      line-height: 1.4;
     }
 
-    #map {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
+    #appVersion {
+      margin-top: 4px;
+      font-size: 0.62rem;
+      color: oklch(0.45 0.02 250);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
     }
-
-    /* map 已在 header 下方，控件不再叠加 status-bar inset */
-    .leaflet-top.leaflet-left {
-      top: 10px;
-      left: 10px;
-    }
-
-    .leaflet-bottom.leaflet-right {
-      bottom: 10px;
-      right: 10px;
-    }
-
-    /* —— Float sheets —— */
-    .search-panel,
-    .badge-panel {
-      position: absolute;
-      z-index: var(--z-float);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .search-panel.is-hidden,
-    .badge-panel.is-hidden { display: none; }
-
-    .search-panel {
-      top: 12px;
-      left: 12px;
-      padding: 12px;
-      width: min(300px, calc(100% - 24px));
-      max-height: calc(100% - 24px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-    }
-
-    .badge-panel {
-      right: 12px;
-      bottom: 12px;
-      padding: 10px 12px;
-      width: min(320px, calc(100% - 24px));
-      max-height: min(58dvh, 440px);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden; /* 列表在 .badge-list 内滚，避免 PC 上整板被地图吞滚轮 */
-      overscroll-behavior: contain;
-    }
-
-    .panel-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 10px;
-      flex-shrink: 0;
-    }
-
-    .search-panel h3,
-    .badge-panel-title {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--ink);
-      margin: 0;
-    }
-
-    .badge-panel .panel-head {
-      background: var(--surface);
-      z-index: 1;
-      padding-bottom: 2px;
-      margin-bottom: 8px;
-    }
-
-    .panel-hide-btn {
-      flex-shrink: 0;
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-2);
-      color: var(--ink-muted);
-      font-size: 0.85rem;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .panel-hide-btn:hover {
-      background: var(--surface-3);
-      color: var(--ink);
-    }
-
-    .panel-hide-btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    .map-panel-restore {
-      position: absolute;
-      z-index: var(--z-float);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .map-panel-restore.left {
-      top: 12px;
-      left: 12px;
-    }
-
-    .map-panel-restore.right {
-      right: 12px;
-      bottom: 12px;
-    }
-
-    .restore-chip {
-      display: none;
-      align-items: center;
-      gap: 4px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--ink);
-      font-size: 0.75rem;
-      font-weight: 500;
-      cursor: pointer;
-      box-shadow: var(--shadow);
-      white-space: nowrap;
-    }
-
-    .restore-chip.show { display: inline-flex; }
-    .restore-chip:hover { border-color: var(--accent); }
 
     /* —— Search / nav form —— */
-    .search-row { margin-bottom: 10px; }
+    .search-row { margin-bottom: 12px; }
 
     .search-row label {
       display: block;
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       font-weight: 500;
       color: var(--ink-faint);
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
 
     .search-row input,
     .search-row select {
       width: 100%;
-      padding: 8px 10px;
+      padding: 12px 12px;
+      min-height: 44px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: var(--surface-2);
       color: var(--ink);
-      font-size: 0.82rem;
+      font-size: 0.9rem;
       outline: none;
     }
 
@@ -442,8 +584,9 @@
     .place-suggest.show { display: block; }
 
     .place-suggest-item {
-      padding: 8px 10px;
-      font-size: 0.75rem;
+      padding: 12px 12px;
+      min-height: 44px;
+      font-size: 0.82rem;
       color: var(--ink);
       cursor: pointer;
       border-bottom: 1px solid var(--border);
@@ -455,14 +598,14 @@
 
     .place-suggest-empty,
     .place-suggest-loading {
-      padding: 8px 10px;
-      font-size: 0.75rem;
+      padding: 10px 12px;
+      font-size: 0.78rem;
       color: var(--ink-muted);
     }
 
     .place-picked {
-      margin-top: 5px;
-      font-size: 0.7rem;
+      margin-top: 6px;
+      font-size: 0.75rem;
       color: var(--ok);
       line-height: 1.3;
       display: none;
@@ -470,16 +613,17 @@
 
     .place-picked.show { display: block; }
 
-    .mode-btns { display: flex; gap: 4px; }
+    .mode-btns { display: flex; gap: 6px; }
 
     .mode-btn {
       flex: 1;
-      padding: 7px 0;
+      padding: 10px 0;
+      min-height: 44px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: var(--surface-2);
       color: var(--ink-muted);
-      font-size: 0.72rem;
+      font-size: 0.78rem;
       cursor: pointer;
       transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
       white-space: nowrap;
@@ -498,16 +642,17 @@
 
     .search-actions {
       display: flex;
-      gap: 6px;
-      margin-top: 10px;
+      gap: 8px;
+      margin-top: 4px;
     }
 
     .search-actions button {
       flex: 1;
-      padding: 8px 0;
+      padding: 12px 0;
+      min-height: 44px;
       border-radius: var(--radius-sm);
       border: none;
-      font-size: 0.78rem;
+      font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
     }
@@ -526,8 +671,8 @@
     .nav-actions button { flex: 1; }
 
     .route-info {
-      margin-top: 8px;
-      font-size: 0.72rem;
+      margin-top: 10px;
+      font-size: 0.78rem;
       color: var(--ink-muted);
       display: none;
       line-height: 1.4;
@@ -536,29 +681,30 @@
     .route-info.show { display: block; }
     .route-info a { color: var(--accent-2); }
 
-    /* —— Day sheet —— */
+    /* —— Day sheet content —— */
     .today-chip {
       display: inline-block;
       margin-left: 6px;
-      padding: 1px 7px;
+      padding: 2px 8px;
       border-radius: 999px;
       background: oklch(0.35 0.08 150);
       color: var(--ok);
-      font-size: 0.65rem;
+      font-size: 0.68rem;
       font-weight: 600;
       vertical-align: middle;
     }
 
     .offline-banner {
       display: none;
-      margin: 0 0 8px;
-      padding: 6px 8px;
+      margin: 0 14px 8px;
+      padding: 8px 10px;
       border-radius: var(--radius-sm);
       background: var(--warn-bg);
       border: 1px solid oklch(0.5 0.08 75);
       color: var(--warn-ink);
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       line-height: 1.35;
+      flex-shrink: 0;
     }
 
     .offline-banner.show { display: block; }
@@ -567,22 +713,30 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      flex: 1 1 auto;
+      /* flex-basis 0: iOS Safari otherwise grows with content and clips (no scroll) */
+      flex: 1 1 0;
       min-height: 0;
+      max-height: 100%;
+      overflow-x: hidden;
       overflow-y: auto;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      /* Extra end space so last long tip can scroll fully above home indicator */
+      padding: 0 12px calc(28px + var(--sab));
     }
 
     .tl-seg {
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       color: var(--accent-2);
-      padding: 5px 8px;
+      padding: 8px 10px;
       margin: 0 2px;
       background: oklch(0.26 0.03 220);
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
-      line-height: 1.35;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .badge-item {
@@ -590,12 +744,13 @@
       flex-direction: column;
       background: var(--surface-2);
       border-radius: var(--radius-sm);
-      font-size: 0.78rem;
+      font-size: 0.82rem;
       color: var(--ink);
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease;
       border: 1px solid transparent;
-      overflow: hidden;
+      /* Do not clip wrapped tip / address lines */
+      overflow: visible;
     }
 
     .badge-item:hover,
@@ -604,15 +759,12 @@
       border-color: var(--border-strong);
     }
 
-    /* 列表 ↔ pin 共用选中态 */
     .badge-item.is-active {
       background: oklch(0.30 0.04 250);
       border-color: var(--accent);
     }
 
-    .badge-item.is-active .badge-name {
-      color: var(--ink);
-    }
+    .badge-item.is-active .badge-name { color: var(--ink); }
 
     .custom-marker {
       background: transparent !important;
@@ -620,7 +772,7 @@
     }
 
     .custom-marker > div {
-      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+      transition: transform 0.15s var(--ease-out), box-shadow 0.15s ease;
     }
 
     .custom-marker.is-active > div {
@@ -631,47 +783,74 @@
     .badge-item-main {
       display: flex;
       align-items: flex-start;
-      gap: 8px;
-      padding: 9px 10px;
+      gap: 10px;
+      padding: 12px;
+      min-height: 48px;
     }
 
     .badge-dot {
-      width: 9px;
-      height: 9px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
-      margin-top: 4px;
+      margin-top: 5px;
     }
 
-    .badge-item-text { min-width: 0; flex: 1; }
+    .badge-item-text {
+      min-width: 0;
+      flex: 1;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
 
     .badge-name {
       font-weight: 600;
       color: var(--ink);
-      line-height: 1.3;
-      font-size: 0.8rem;
+      line-height: 1.35;
+      font-size: 0.88rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .badge-sub {
-      margin-top: 2px;
-      font-size: 0.68rem;
+      margin-top: 3px;
+      font-size: 0.72rem;
       color: var(--ink-muted);
-      line-height: 1.35;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      /* Collapsed row: keep list scannable; full tip lives in .badge-detail */
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .badge-item.is-open .badge-sub {
+      display: block;
+      -webkit-line-clamp: unset;
+      line-clamp: unset;
+      overflow: visible;
     }
 
     .badge-detail {
       display: none;
-      padding: 0 10px 10px 28px;
+      padding: 0 12px 14px 32px;
       border-top: 1px solid var(--border);
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .badge-item.is-open .badge-detail { display: block; }
 
     .badge-detail p {
-      margin: 8px 0 0;
-      font-size: 0.72rem;
+      margin: 10px 0 0;
+      font-size: 0.78rem;
       color: var(--ink-muted);
-      line-height: 1.45;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .badge-detail .tip { color: var(--ink-faint); }
@@ -679,8 +858,8 @@
     .badge-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 10px;
     }
 
     .badge-actions button,
@@ -690,13 +869,13 @@
       background: var(--bg);
       color: var(--ink);
       border-radius: var(--radius-sm);
-      padding: 7px 9px;
-      font-size: 0.7rem;
+      padding: 11px 12px;
+      font-size: 0.78rem;
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
       line-height: 1.2;
-      min-height: 32px;
+      min-height: 44px;
     }
 
     .badge-actions button.primary {
@@ -718,14 +897,14 @@
     .nav-origin-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
+      gap: 6px;
+      margin-top: 10px;
     }
 
     .nav-origin-row button {
-      font-size: 0.65rem;
-      padding: 5px 7px;
-      min-height: 28px;
+      font-size: 0.72rem;
+      padding: 8px 10px;
+      min-height: 36px;
       border: 1px solid var(--border);
       background: var(--bg);
       color: var(--ink-muted);
@@ -740,8 +919,8 @@
     }
 
     .empty-today {
-      padding: 14px 10px;
-      font-size: 0.75rem;
+      padding: 18px 12px;
+      font-size: 0.82rem;
       color: var(--ink-muted);
       line-height: 1.5;
       text-align: center;
@@ -779,7 +958,7 @@
     }
 
     .unlock-card p {
-      font-size: 0.78rem;
+      font-size: 0.82rem;
       color: var(--ink-muted);
       line-height: 1.5;
       margin-bottom: 14px;
@@ -787,12 +966,13 @@
 
     .unlock-card input {
       width: 100%;
-      padding: 11px 12px;
+      padding: 12px;
+      min-height: 48px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: var(--bg);
       color: var(--ink);
-      font-size: 0.95rem;
+      font-size: 1rem;
       outline: none;
       margin-bottom: 10px;
     }
@@ -802,7 +982,7 @@
     .unlock-card .err {
       display: none;
       color: var(--danger);
-      font-size: 0.75rem;
+      font-size: 0.78rem;
       margin: -4px 0 10px;
     }
 
@@ -810,12 +990,13 @@
 
     .unlock-card button {
       width: 100%;
-      padding: 11px;
+      padding: 12px;
+      min-height: 48px;
       border: none;
       border-radius: var(--radius-sm);
       background: var(--accent);
       color: #fff;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       cursor: pointer;
     }
@@ -825,12 +1006,12 @@
 
     .unlock-card .hint {
       margin-top: 12px;
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       color: var(--ink-faint);
       line-height: 1.45;
     }
 
-    /* —— Popups / footer —— */
+    /* —— Popups —— */
     .leaflet-popup-content-wrapper {
       background: var(--surface);
       color: var(--ink);
@@ -845,7 +1026,7 @@
       font-size: 0.88rem;
       line-height: 1.45;
       min-width: 180px;
-      max-width: 280px;
+      max-width: min(280px, 70vw);
     }
 
     .popup-title {
@@ -903,47 +1084,87 @@
       line-height: 1.4;
     }
 
-    footer {
-      background: var(--surface);
-      padding-top: 6px;
-      padding-right: calc(12px + constant(safe-area-inset-right));
-      padding-right: calc(12px + env(safe-area-inset-right, 0px));
-      padding-right: calc(12px + var(--sar));
-      padding-bottom: max(6px, constant(safe-area-inset-bottom));
-      padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
-      padding-bottom: max(6px, var(--sab));
-      padding-left: calc(12px + constant(safe-area-inset-left));
-      padding-left: calc(12px + env(safe-area-inset-left, 0px));
-      padding-left: calc(12px + var(--sal));
-      font-size: 0.7rem;
-      color: var(--ink-faint);
-      text-align: center;
-      border-top: 1px solid var(--border);
-      flex-shrink: 0;
-      line-height: 1.35;
-    }
-
-    #pageFooter { font-size: 0.7rem; color: var(--ink-faint); }
-
-    #appVersion {
-      margin-top: 2px;
-      font-size: 0.62rem;
-      color: oklch(0.45 0.02 250);
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.02em;
-    }
-
-    .badge-panel::-webkit-scrollbar,
     .badge-list::-webkit-scrollbar,
-    .search-panel::-webkit-scrollbar { width: 5px; }
-    .badge-panel::-webkit-scrollbar-track,
+    .aux-sheet-body::-webkit-scrollbar { width: 5px; }
     .badge-list::-webkit-scrollbar-track,
-    .search-panel::-webkit-scrollbar-track { background: transparent; }
-    .badge-panel::-webkit-scrollbar-thumb,
+    .aux-sheet-body::-webkit-scrollbar-track { background: transparent; }
     .badge-list::-webkit-scrollbar-thumb,
-    .search-panel::-webkit-scrollbar-thumb {
+    .aux-sheet-body::-webkit-scrollbar-thumb {
       background: var(--border);
       border-radius: 4px;
+    }
+
+    /* —— Desktop: docked day panel, roomy map —— */
+    @media (min-width: 900px) {
+      :root { --day-sheet-h: 0px; }
+
+      .top-chrome {
+        pointer-events: none;
+      }
+
+      .top-bar {
+        max-width: calc(100% - min(380px, 36vw) - 36px);
+      }
+
+      .map-fabs {
+        right: calc(min(380px, 36vw) + 24px);
+        bottom: 24px;
+      }
+
+      .leaflet-bottom.leaflet-right {
+        bottom: 24px;
+        right: calc(min(380px, 36vw) + 24px);
+      }
+
+      .leaflet-top.leaflet-left {
+        top: calc(var(--top-chrome-h) + 16px);
+      }
+
+      .day-sheet {
+        left: auto;
+        right: 14px;
+        top: 14px;
+        bottom: 14px;
+        width: min(380px, 36vw);
+        height: auto !important;
+        max-height: none;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding-bottom: 0;
+        box-shadow: var(--shadow);
+        transform: none !important;
+        pointer-events: auto !important;
+      }
+
+      .day-sheet .sheet-grab { display: none; }
+
+      .day-sheet[data-state="hidden"] {
+        display: none;
+      }
+
+      .aux-sheet {
+        left: 14px;
+        right: auto;
+        top: 14px;
+        bottom: auto;
+        width: min(360px, 34vw);
+        max-height: calc(100% - 28px);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding-bottom: 0;
+        box-shadow: var(--shadow);
+      }
+
+      .aux-sheet.is-hidden {
+        transform: none;
+        display: none;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .sheet-scrim { display: none !important; }
+
+      .sheet-grab { cursor: default; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -967,120 +1188,138 @@
     </div>
   </div>
 
-  <header id="appHeader">
-    <div class="header-top">
-      <div class="header-titles">
-        <h1 id="pageTitle">大阪 × 东京 行程地图</h1>
-        <div class="subtitle" id="pageSubtitle">加载行程中…</div>
-      </div>
-      <button type="button" class="header-toggle" id="headerToggle" title="折叠/展开筛选" aria-label="折叠顶部" aria-expanded="true">▾</button>
-    </div>
-
-    <div class="header-body" id="headerBody">
-      <div class="filter-section">
-        <div class="filter-label">城市筛选</div>
-        <div class="city-filters">
-          <button class="city-btn all-btn active" data-city="all">全部</button>
-          <button class="city-btn" data-city="osaka">只看大阪</button>
-          <button class="city-btn" data-city="tokyo">只看东京</button>
-        </div>
-      </div>
-      
-      <div class="filter-section">
-        <div class="filter-label">日期筛选（可多选）</div>
-        <div class="day-filters" id="dayFilters">
-          <button class="day-btn all-day active" data-day="all">全部日期</button>
-        </div>
-      </div>
-      
-      <div class="legend">
-        <div class="legend-item"><span class="dot hotel"></span> 酒店</div>
-        <div class="legend-item"><span class="dot osaka"></span> 大阪</div>
-        <div class="legend-item"><span class="dot tokyo"></span> 东京</div>
-        <div class="legend-item"><span class="dot bus"></span> 夜巴</div>
-      </div>
-    </div>
-  </header>
-
   <div id="mapShell">
     <div id="map"></div>
 
-    <div class="map-panel-restore left">
-      <button type="button" class="restore-chip" id="restoreSearch">导航</button>
-    </div>
-    <div class="map-panel-restore right">
-      <button type="button" class="restore-chip" id="restoreBadges">今日行程</button>
+    <header class="top-chrome" id="appHeader">
+      <div class="top-bar">
+        <div class="header-titles">
+          <h1 id="pageTitle">大阪 × 东京 行程地图</h1>
+          <div class="subtitle" id="pageSubtitle">加载行程中…</div>
+        </div>
+        <div class="top-actions">
+          <button type="button" class="chrome-btn" id="restoreSearch" aria-expanded="false" aria-controls="searchPanel">导航</button>
+          <button type="button" class="chrome-btn" id="filterOpenBtn" aria-expanded="false" aria-controls="filterSheet">筛选</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="map-fabs" id="mapFabs">
+      <button type="button" class="fab-btn primary" id="restoreBadges">行程</button>
     </div>
 
-    <div class="search-panel" id="searchPanel">
+    <button type="button" class="sheet-scrim" id="sheetScrim" aria-label="关闭面板" tabindex="-1"></button>
+
+    <aside class="aux-sheet is-hidden" id="filterSheet" aria-hidden="true" aria-labelledby="filterTitle">
+      <button type="button" class="sheet-grab" id="filterGrab" aria-label="关闭筛选">
+        <span class="sheet-grab-bar" aria-hidden="true"></span>
+      </button>
       <div class="panel-head">
-        <h3>导航</h3>
-        <button type="button" class="panel-hide-btn" id="hideSearch" title="隐藏" aria-label="隐藏锚点导航">✕</button>
+        <h3 id="filterTitle">筛选</h3>
+        <button type="button" class="panel-hide-btn" id="filterCloseBtn" title="关闭" aria-label="关闭筛选">✕</button>
       </div>
-      
-      <div class="search-row" id="startPicker">
-        <label>起点（搜索选择）</label>
-        <div class="place-search-wrap" id="startSearchWrap">
-          <input type="text" id="startSearchInput" placeholder="搜索地点，如：酒店 / 五反田 / 心斋桥" autocomplete="off" />
-          <div class="place-suggest" id="startSuggest"></div>
+      <div class="aux-sheet-body">
+        <div class="filter-section">
+          <div class="filter-label">城市</div>
+          <div class="city-filters">
+            <button class="city-btn all-btn active" data-city="all">全部</button>
+            <button class="city-btn" data-city="osaka">只看大阪</button>
+            <button class="city-btn" data-city="tokyo">只看东京</button>
+          </div>
         </div>
-        <div class="place-picked" id="startPicked"></div>
-      </div>
-      
-      <div class="search-row" id="targetPicker">
-        <label>终点（搜索选择）</label>
-        <div class="place-search-wrap" id="targetSearchWrap">
-          <input type="text" id="targetSearchInput" placeholder="搜索地点，如：银座 / 浅草寺 / USJ" autocomplete="off" />
-          <div class="place-suggest" id="targetSuggest"></div>
-        </div>
-        <div class="place-picked" id="targetPicked"></div>
-      </div>
 
-      <div class="search-row">
-        <label>出行方式（交给外部地图）</label>
-        <div class="mode-btns" id="modeBtns">
-          <button type="button" class="mode-btn active" data-mode="transit">🚇 公交</button>
-          <button type="button" class="mode-btn" data-mode="walking">🚶 步行</button>
-          <button type="button" class="mode-btn" data-mode="driving">🚗 驾车</button>
+        <div class="filter-section">
+          <div class="filter-label">日期（可多选）</div>
+          <div class="day-filters" id="dayFilters">
+            <button class="day-btn all-day active" data-day="all">全部日期</button>
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="dot hotel"></span> 酒店</div>
+          <div class="legend-item"><span class="dot osaka"></span> 大阪</div>
+          <div class="legend-item"><span class="dot tokyo"></span> 东京</div>
+          <div class="legend-item"><span class="dot bus"></span> 夜巴</div>
+        </div>
+
+        <div class="sheet-meta">
+          <div id="pageFooter">加载行程…</div>
+          <div id="appVersion"></div>
         </div>
       </div>
-      
-      <div class="search-actions nav-actions">
-        <button type="button" class="btn-route" id="btnGoogleNav">Google 地图</button>
-        <button type="button" class="btn-amap" id="btnAmapNav">高德地图</button>
+    </aside>
+
+    <aside class="aux-sheet is-hidden" id="searchPanel" aria-hidden="true" aria-labelledby="navTitle">
+      <button type="button" class="sheet-grab" id="navGrab" aria-label="关闭导航">
+        <span class="sheet-grab-bar" aria-hidden="true"></span>
+      </button>
+      <div class="panel-head">
+        <h3 id="navTitle">导航</h3>
+        <button type="button" class="panel-hide-btn" id="hideSearch" title="关闭" aria-label="关闭导航">✕</button>
       </div>
-      <div class="search-actions" style="margin-top:6px">
-        <button type="button" class="btn-clear" id="btnClearRoute">清除</button>
+      <div class="aux-sheet-body">
+        <div class="search-row" id="startPicker">
+          <label for="startSearchInput">起点（搜索选择）</label>
+          <div class="place-search-wrap" id="startSearchWrap">
+            <input type="text" id="startSearchInput" placeholder="搜索地点，如：酒店 / 五反田 / 心斋桥" autocomplete="off" />
+            <div class="place-suggest" id="startSuggest"></div>
+          </div>
+          <div class="place-picked" id="startPicked"></div>
+        </div>
+
+        <div class="search-row" id="targetPicker">
+          <label for="targetSearchInput">终点（搜索选择）</label>
+          <div class="place-search-wrap" id="targetSearchWrap">
+            <input type="text" id="targetSearchInput" placeholder="搜索地点，如：银座 / 浅草寺 / USJ" autocomplete="off" />
+            <div class="place-suggest" id="targetSuggest"></div>
+          </div>
+          <div class="place-picked" id="targetPicked"></div>
+        </div>
+
+        <div class="search-row">
+          <label>出行方式（交给外部地图）</label>
+          <div class="mode-btns" id="modeBtns">
+            <button type="button" class="mode-btn active" data-mode="transit">🚇 公交</button>
+            <button type="button" class="mode-btn" data-mode="walking">🚶 步行</button>
+            <button type="button" class="mode-btn" data-mode="driving">🚗 驾车</button>
+          </div>
+        </div>
+
+        <div class="search-actions nav-actions">
+          <button type="button" class="btn-route" id="btnGoogleNav">Google 地图</button>
+          <button type="button" class="btn-amap" id="btnAmapNav">高德地图</button>
+        </div>
+        <div class="search-actions" style="margin-top:8px">
+          <button type="button" class="btn-clear" id="btnClearRoute">清除</button>
+        </div>
+
+        <div class="route-info" id="routeInfo"></div>
       </div>
-      
-      <div class="route-info" id="routeInfo"></div>
-    </div>
-    
-    <div class="badge-panel" id="badgePanel">
+    </aside>
+
+    <aside class="day-sheet" id="badgePanel" data-state="half" aria-labelledby="timelineTitle">
+      <button type="button" class="sheet-grab" id="sheetGrab" aria-label="拖动或切换行程面板高度">
+        <span class="sheet-grab-bar" aria-hidden="true"></span>
+      </button>
       <div class="panel-head">
         <div class="badge-panel-title">
           <span id="timelineTitle">今日行程</span>
           <span class="today-chip" id="todayChip" style="display:none">今天</span>
           <span id="badgeCount"></span>
         </div>
-        <button type="button" class="panel-hide-btn" id="hideBadges" title="隐藏" aria-label="隐藏今日行程">✕</button>
+        <button type="button" class="sheet-icon-btn" id="hideBadges" title="收起" aria-label="收起行程面板">▾</button>
       </div>
       <div class="offline-banner" id="offlineBanner">离线模式：显示已缓存行程。地图/搜索可能不可用。</div>
       <div class="badge-list" id="badgeList"></div>
-    </div>
+    </aside>
   </div>
-
-  <footer>
-    <div id="pageFooter">加载行程…</div>
-    <div id="appVersion"></div>
-  </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <script>
     // 发版时改这里；底栏会显示，用来确认手机跑的是哪一版
-    const APP_VERSION = '2026.08.08-1';
-    const SW_CACHE_LABEL = 'v12';
+    const APP_VERSION = '2026.08.28-2';
+    const SW_CACHE_LABEL = 'v14';
 
     function isStandalonePwa() {
       return window.navigator.standalone === true ||
@@ -1125,94 +1364,355 @@
       maxZoom: 19
     }).addTo(map);
 
-    // 浮层面板在地图之上：阻止滚轮/点击穿透到 Leaflet（PC 行程列表无法滚动的根因）
-    ['searchPanel', 'badgePanel'].forEach((id) => {
+    // 浮层面板在地图之上：阻止滚轮/点击穿透到 Leaflet
+    ['searchPanel', 'badgePanel', 'filterSheet'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       L.DomEvent.disableScrollPropagation(el);
       L.DomEvent.disableClickPropagation(el);
     });
+    // 列表只要隔滚动，不要隔 click（否则展开详情会偶发失效）
+    const badgeListEl = document.getElementById('badgeList');
+    if (badgeListEl) L.DomEvent.disableScrollPropagation(badgeListEl);
 
-    // 强制 Service Worker 更新（避免旧 CSS 残留）
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((regs) => {
         regs.forEach((r) => r.update());
       }).catch(() => {});
     }
 
-    // 面板显示/隐藏（localStorage 记忆）
-    function setPanelVisible(panelId, chipId, visible) {
-      const panel = document.getElementById(panelId);
-      const chip = document.getElementById(chipId);
+    const DAY_STATES = ['peek', 'half', 'full'];
+    const mqCompact = window.matchMedia('(max-width: 899px)');
+
+    function isCompactLayout() {
+      return mqCompact.matches;
+    }
+
+    function invalidateMapSoon() {
+      setTimeout(() => { try { map.invalidateSize(); } catch (_) {} }, 60);
+    }
+
+    function syncDayFab() {
+      const sheet = document.getElementById('badgePanel');
+      const chip = document.getElementById('restoreBadges');
+      if (!sheet || !chip) return;
+      const hidden = sheet.getAttribute('data-state') === 'hidden';
+      chip.classList.toggle('show', hidden);
+    }
+
+    function syncNavFab() {
+      const panel = document.getElementById('searchPanel');
+      const chip = document.getElementById('restoreSearch');
       if (!panel || !chip) return;
-      panel.classList.toggle('is-hidden', !visible);
-      chip.classList.toggle('show', !visible);
-      try {
-        localStorage.setItem('japan-map:' + panelId, visible ? '1' : '0');
-      } catch (_) {}
+      const open = !panel.classList.contains('is-hidden');
+      chip.classList.toggle('is-active', open);
+      chip.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
 
-    function restorePanelState(panelId, chipId, defaultVisible = true) {
-      let visible = defaultVisible;
-      try {
-        const v = localStorage.getItem('japan-map:' + panelId);
-        if (v === '0') visible = false;
-        if (v === '1') visible = true;
-      } catch (_) {}
-      setPanelVisible(panelId, chipId, visible);
-    }
-
-    document.getElementById('hideSearch').addEventListener('click', () => {
-      setPanelVisible('searchPanel', 'restoreSearch', false);
-    });
-    document.getElementById('restoreSearch').addEventListener('click', () => {
-      setPanelVisible('searchPanel', 'restoreSearch', true);
-    });
-    document.getElementById('hideBadges').addEventListener('click', () => {
-      setPanelVisible('badgePanel', 'restoreBadges', false);
-    });
-    document.getElementById('restoreBadges').addEventListener('click', () => {
-      setPanelVisible('badgePanel', 'restoreBadges', true);
-    });
-
-    restorePanelState('searchPanel', 'restoreSearch', true);
-    restorePanelState('badgePanel', 'restoreBadges', true);
-
-    // 顶部筛选折叠（手机默认可收起，腾出地图）
-    function setHeaderCollapsed(collapsed) {
-      const header = document.getElementById('appHeader');
-      const btn = document.getElementById('headerToggle');
-      if (!header || !btn) return;
-      header.classList.toggle('is-collapsed', collapsed);
-      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      btn.title = collapsed ? '展开筛选' : '折叠筛选';
-      btn.setAttribute('aria-label', collapsed ? '展开顶部' : '折叠顶部');
-      try {
-        localStorage.setItem('japan-map:headerCollapsed', collapsed ? '1' : '0');
-      } catch (_) {}
-      // Leaflet 需在容器尺寸变化后重算
-      setTimeout(() => { try { map.invalidateSize(); } catch (_) {} }, 50);
-    }
-
-    function restoreHeaderState() {
-      let collapsed = false;
-      try {
-        const v = localStorage.getItem('japan-map:headerCollapsed');
-        if (v === '1') collapsed = true;
-        else if (v === '0') collapsed = false;
-        else collapsed = window.matchMedia('(max-width: 640px)').matches;
-      } catch (_) {
-        collapsed = window.matchMedia('(max-width: 640px)').matches;
+    function syncScrim() {
+      const scrim = document.getElementById('sheetScrim');
+      const daySheet = document.getElementById('badgePanel');
+      const filterOpen = !document.getElementById('filterSheet')?.classList.contains('is-hidden');
+      const navOpen = !document.getElementById('searchPanel')?.classList.contains('is-hidden');
+      const on = isCompactLayout() && (filterOpen || navOpen);
+      if (scrim) {
+        scrim.classList.toggle('is-on', on);
+        scrim.tabIndex = on ? 0 : -1;
       }
-      setHeaderCollapsed(collapsed);
+      // Phone: tuck day sheet while filter/nav is open so panels don't stack
+      if (daySheet) {
+        daySheet.classList.toggle('is-tucked', on);
+      }
     }
 
-    document.getElementById('headerToggle').addEventListener('click', () => {
-      const header = document.getElementById('appHeader');
-      setHeaderCollapsed(!header.classList.contains('is-collapsed'));
+    function syncFilterBtn() {
+      const btn = document.getElementById('filterOpenBtn');
+      const sheet = document.getElementById('filterSheet');
+      if (!btn || !sheet) return;
+      const open = !sheet.classList.contains('is-hidden');
+      btn.classList.toggle('is-active', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function updateDaySheetOffset() {
+      const sheet = document.getElementById('badgePanel');
+      const root = document.documentElement;
+      if (!sheet || !isCompactLayout()) {
+        root.style.setProperty('--day-sheet-h', '0px');
+        return;
+      }
+      const state = sheet.getAttribute('data-state') || 'half';
+      if (state === 'hidden') {
+        root.style.setProperty('--day-sheet-h', '0px');
+        return;
+      }
+      // Read after layout; fall back to CSS state heights
+      requestAnimationFrame(() => {
+        const h = sheet.getBoundingClientRect().height;
+        root.style.setProperty('--day-sheet-h', Math.max(0, Math.round(h)) + 'px');
+      });
+    }
+
+    function setDaySheetState(state, persist = true) {
+      const sheet = document.getElementById('badgePanel');
+      const hideBtn = document.getElementById('hideBadges');
+      if (!sheet) return;
+      const next = DAY_STATES.includes(state) || state === 'hidden' ? state : 'half';
+      sheet.setAttribute('data-state', next);
+      if (hideBtn) {
+        if (next === 'full') {
+          hideBtn.textContent = '▾';
+          hideBtn.title = '半屏';
+          hideBtn.setAttribute('aria-label', '收起到半屏');
+        } else if (next === 'half') {
+          hideBtn.textContent = '▾';
+          hideBtn.title = '收起';
+          hideBtn.setAttribute('aria-label', '收起到预览');
+        } else if (next === 'peek') {
+          hideBtn.textContent = '▴';
+          hideBtn.title = '展开';
+          hideBtn.setAttribute('aria-label', '展开行程');
+        } else {
+          hideBtn.textContent = '▴';
+          hideBtn.title = '展开';
+          hideBtn.setAttribute('aria-label', '展开行程');
+        }
+      }
+      if (persist) {
+        try { localStorage.setItem('japan-map:daySheet', next); } catch (_) {}
+      }
+      syncDayFab();
+      updateDaySheetOffset();
+      invalidateMapSoon();
+    }
+
+    function ensureDaySheetVisible(minState = 'half') {
+      const sheet = document.getElementById('badgePanel');
+      if (!sheet) return;
+      const cur = sheet.getAttribute('data-state') || 'half';
+      const rank = { hidden: 0, peek: 1, half: 2, full: 3 };
+      if ((rank[cur] || 0) < (rank[minState] || 2)) {
+        setDaySheetState(minState);
+      }
+    }
+
+    /** 兼容旧调用：行程面板开/关 */
+    function setPanelVisible(panelId, chipId, visible) {
+      if (panelId === 'badgePanel') {
+        if (visible) ensureDaySheetVisible(isCompactLayout() ? 'half' : 'half');
+        else setDaySheetState(isCompactLayout() ? 'hidden' : 'hidden');
+        return;
+      }
+      if (panelId === 'searchPanel') {
+        setAuxSheet('searchPanel', visible);
+      }
+    }
+
+    function setAuxSheet(id, open) {
+      const panel = document.getElementById(id);
+      if (!panel) return;
+      panel.classList.toggle('is-hidden', !open);
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (id === 'searchPanel') {
+        try { localStorage.setItem('japan-map:searchPanel', open ? '1' : '0'); } catch (_) {}
+        syncNavFab();
+      }
+      if (id === 'filterSheet') syncFilterBtn();
+      syncScrim();
+      invalidateMapSoon();
+    }
+
+    function closeAuxSheets() {
+      setAuxSheet('searchPanel', false);
+      setAuxSheet('filterSheet', false);
+    }
+
+    function cycleDaySheet() {
+      const sheet = document.getElementById('badgePanel');
+      if (!sheet) return;
+      const cur = sheet.getAttribute('data-state') || 'half';
+      if (!isCompactLayout()) {
+        setDaySheetState(cur === 'hidden' ? 'half' : 'hidden');
+        return;
+      }
+      const order = ['peek', 'half', 'full'];
+      const i = order.indexOf(cur);
+      const next = order[(i < 0 ? 1 : i + 1) % order.length];
+      setDaySheetState(next);
+    }
+
+    function collapseDaySheetStep() {
+      const sheet = document.getElementById('badgePanel');
+      if (!sheet) return;
+      const cur = sheet.getAttribute('data-state') || 'half';
+      if (!isCompactLayout()) {
+        setDaySheetState('hidden');
+        return;
+      }
+      if (cur === 'full') setDaySheetState('half');
+      else if (cur === 'half') setDaySheetState('peek');
+      else if (cur === 'peek') setDaySheetState('hidden');
+      else setDaySheetState('half');
+    }
+
+    function restoreDaySheetState() {
+      let state = isCompactLayout() ? 'half' : 'half';
+      try {
+        const v = localStorage.getItem('japan-map:daySheet');
+        if (v && (DAY_STATES.includes(v) || v === 'hidden')) state = v;
+      } catch (_) {}
+      if (!isCompactLayout() && state === 'peek') state = 'half';
+      setDaySheetState(state, false);
+    }
+
+    function restoreNavState() {
+      let open = false;
+      if (!isCompactLayout()) {
+        try {
+          const v = localStorage.getItem('japan-map:searchPanel');
+          if (v === '1') open = true;
+        } catch (_) {}
+      }
+      setAuxSheet('searchPanel', open);
+      setAuxSheet('filterSheet', false);
+    }
+
+    // Day sheet drag (phone)
+    (function bindDaySheetDrag() {
+      const grab = document.getElementById('sheetGrab');
+      const sheet = document.getElementById('badgePanel');
+      if (!grab || !sheet) return;
+
+      let dragging = false;
+      let startY = 0;
+      let startH = 0;
+
+      function heightForState(state) {
+        const shell = document.getElementById('mapShell');
+        const shellH = shell ? shell.clientHeight : window.innerHeight;
+        const peek = 72;
+        if (state === 'peek') return peek;
+        if (state === 'full') return Math.max(peek, shellH - 64);
+        return Math.round(shellH * 0.42);
+      }
+
+      function stateForHeight(h) {
+        const peek = heightForState('peek');
+        const half = heightForState('half');
+        const full = heightForState('full');
+        const midPH = (peek + half) / 2;
+        const midHF = (half + full) / 2;
+        if (h < midPH - 20) return h < peek * 0.55 ? 'hidden' : 'peek';
+        if (h < midHF) return 'half';
+        return 'full';
+      }
+
+      function onPointerDown(e) {
+        if (!isCompactLayout()) return;
+        dragging = true;
+        startY = e.clientY;
+        startH = sheet.getBoundingClientRect().height;
+        sheet.classList.add('is-dragging');
+        try { grab.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      function onPointerMove(e) {
+        if (!dragging) return;
+        const dy = startY - e.clientY;
+        const shell = document.getElementById('mapShell');
+        const maxH = shell ? shell.clientHeight - 48 : window.innerHeight;
+        const next = Math.min(maxH, Math.max(48, startH + dy));
+        sheet.style.height = next + 'px';
+      }
+
+      function onPointerUp(e) {
+        if (!dragging) return;
+        dragging = false;
+        sheet.classList.remove('is-dragging');
+        const h = sheet.getBoundingClientRect().height;
+        sheet.style.height = '';
+        const next = stateForHeight(h);
+        setDaySheetState(next);
+        try { grab.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      grab.addEventListener('pointerdown', onPointerDown);
+      grab.addEventListener('pointermove', onPointerMove);
+      grab.addEventListener('pointerup', onPointerUp);
+      grab.addEventListener('pointercancel', onPointerUp);
+
+      grab.addEventListener('click', (e) => {
+        // Ignore click that ends a drag with movement
+        if (Math.abs((e.clientY || 0) - startY) > 8) return;
+      });
+    })();
+
+    document.getElementById('sheetGrab')?.addEventListener('dblclick', () => {
+      cycleDaySheet();
     });
 
-    restoreHeaderState();
+    document.getElementById('hideBadges')?.addEventListener('click', () => {
+      collapseDaySheetStep();
+    });
+    document.getElementById('restoreBadges')?.addEventListener('click', () => {
+      setDaySheetState('half');
+    });
+
+    document.getElementById('hideSearch')?.addEventListener('click', () => {
+      setAuxSheet('searchPanel', false);
+    });
+    document.getElementById('restoreSearch')?.addEventListener('click', () => {
+      const panel = document.getElementById('searchPanel');
+      const open = panel && panel.classList.contains('is-hidden');
+      setAuxSheet('filterSheet', false);
+      setAuxSheet('searchPanel', !!open);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAuxSheets();
+    });
+    document.getElementById('navGrab')?.addEventListener('click', () => {
+      setAuxSheet('searchPanel', false);
+    });
+
+    document.getElementById('filterOpenBtn')?.addEventListener('click', () => {
+      const sheet = document.getElementById('filterSheet');
+      const open = sheet && sheet.classList.contains('is-hidden');
+      if (open) setAuxSheet('searchPanel', false);
+      setAuxSheet('filterSheet', !!open);
+    });
+    document.getElementById('filterCloseBtn')?.addEventListener('click', () => {
+      setAuxSheet('filterSheet', false);
+    });
+    document.getElementById('filterGrab')?.addEventListener('click', () => {
+      setAuxSheet('filterSheet', false);
+    });
+    document.getElementById('sheetScrim')?.addEventListener('click', () => {
+      closeAuxSheets();
+    });
+
+    mqCompact.addEventListener('change', () => {
+      restoreDaySheetState();
+      restoreNavState();
+      syncScrim();
+      invalidateMapSoon();
+    });
+
+    restoreDaySheetState();
+    restoreNavState();
+    syncDayFab();
+    syncNavFab();
+    updateDaySheetOffset();
+    window.addEventListener('resize', () => updateDaySheetOffset());
+
+    // Tap title row to raise sheet from peek
+    document.querySelector('#badgePanel .panel-head')?.addEventListener('click', (e) => {
+      if (e.target.closest('#hideBadges')) return;
+      const sheet = document.getElementById('badgePanel');
+      if (!sheet || !isCompactLayout()) return;
+      const cur = sheet.getAttribute('data-state');
+      if (cur === 'peek' || cur === 'hidden') setDaySheetState('half');
+    });
 
     function createIcon(color, size = 16) {
       return L.divIcon({
@@ -1581,11 +2081,29 @@
         });
         const item = list.querySelector('.badge-item[data-point-id="' + CSS.escape(pointId) + '"]');
         if (item) {
+          // Long tips expand below the fold — raise sheet and scroll so text stays readable
+          if (openDetail && isCompactLayout()) {
+            ensureDaySheetVisible('full');
+          }
           requestAnimationFrame(() => {
-            item.scrollIntoView({
+            const detail = item.querySelector('.badge-detail');
+            const target = (openDetail && detail && item.classList.contains('is-open'))
+              ? detail
+              : item;
+            target.scrollIntoView({
               behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-              block: 'nearest'
+              block: 'nearest',
+              inline: 'nearest'
             });
+            // Second pass after layout expands tip height
+            if (openDetail) {
+              setTimeout(() => {
+                item.scrollIntoView({
+                  behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+                  block: 'nearest'
+                });
+              }, prefersReducedMotion() ? 0 : 180);
+            }
           });
         }
       }
@@ -1715,8 +2233,8 @@
         return;
       }
       if (mode === 'custom') {
-        document.getElementById('searchPanel')?.classList.remove('is-hidden');
-        document.getElementById('restoreSearch')?.classList.remove('show');
+        setAuxSheet('filterSheet', false);
+        setAuxSheet('searchPanel', true);
         customTarget = { lat: dest.lat, lng: dest.lng, name: dest.name, shortName: dest.name };
         document.getElementById('targetSearchInput').value = dest.name;
         document.getElementById('targetPicked').textContent = '✓ 已选：' + dest.name;
@@ -1903,7 +2421,7 @@
         return;
       }
 
-      // 多日 / 全部：精简列表
+      // 多日 / 全部：仍可展开看 tip，避免长文只能出现在弹窗里
       titleEl.textContent = '当前景点';
       todayChip.style.display = 'none';
       count.textContent = `(${visiblePoints.length})`;
@@ -1915,17 +2433,53 @@
         const item = document.createElement('div');
         item.className = 'badge-item';
         item.dataset.pointId = p.id;
+        const dayBits = (p.days || []).join(', ');
         item.innerHTML = `
           <div class="badge-item-main">
             <span class="badge-dot" style="background:${getColor(p.type)}"></span>
             <div class="badge-item-text">
               <div class="badge-name">${p.name}</div>
-              <div class="badge-sub">${(p.days || []).join(', ')}</div>
+              <div class="badge-sub">${dayBits}${p.desc ? ' · ' + p.desc : ''}</div>
+            </div>
+          </div>
+          <div class="badge-detail">
+            ${p.desc ? `<p>${p.desc}</p>` : ''}
+            ${p.tip ? `<p class="tip">🚌 ${p.tip}</p>` : ''}
+            <p class="tip">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</p>
+            <div class="nav-origin-row" data-role="origin">
+              <button type="button" data-origin="me" class="active">从我的位置</button>
+              <button type="button" data-origin="hotel">从酒店</button>
+              <button type="button" data-origin="custom">自选起点</button>
+            </div>
+            <div class="badge-actions">
+              <button type="button" class="primary" data-act="nav">去导航</button>
+              <button type="button" data-act="copy">复制名称/坐标</button>
+              <button type="button" data-act="map">地图定位</button>
             </div>
           </div>
         `;
-        item.addEventListener('click', () => {
-          selectPoint(p.id, { source: 'list', openDetail: false });
+        item.querySelector('.badge-item-main').addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectPoint(p.id, { source: 'list', openDetail: true, toggle: true });
+        });
+        item.querySelector('[data-role="origin"]').addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-origin]');
+          if (!btn) return;
+          e.stopPropagation();
+          item.querySelectorAll('[data-origin]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          navOriginMode = btn.getAttribute('data-origin');
+        });
+        item.querySelector('.badge-actions').addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-act]');
+          if (!btn) return;
+          e.stopPropagation();
+          const act = btn.getAttribute('data-act');
+          const originBtn = item.querySelector('[data-origin].active');
+          const origin = originBtn ? originBtn.getAttribute('data-origin') : navOriginMode;
+          if (act === 'nav') openNavToPlace(p, origin);
+          else if (act === 'copy') copyText(`${p.name}\n${p.desc || ''}\n${p.lat}, ${p.lng}\n${p.tip || ''}`);
+          else if (act === 'map') selectPoint(p.id, { source: 'button', openDetail: true });
         });
         list.appendChild(item);
       });
